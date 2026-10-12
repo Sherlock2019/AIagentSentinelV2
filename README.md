@@ -351,7 +351,7 @@ For AI agents that work inside CI/CD (coding agents, release bots), wrap their s
 
 ```yaml
 - name: Agent tries to deploy
-  uses: your-org/agentsentinel/github-action@main
+  uses: Sherlock2019/AIagentSentinelV2/github-action@main
   with:
     sentinel-url: ${{ vars.SENTINEL_URL }}            # e.g. http://<ec2-public-ip>:5173
     agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}  # issued on the CI/CD Integration page
@@ -364,7 +364,13 @@ For AI agents that work inside CI/CD (coding agents, release bots), wrap their s
 
 Outputs: `decision`, `final-decision`, `allowed`, `risk-score`, `severity`, `event-id`, `agent-status`, `inspector-url`. Each decision is written to the job summary and recorded in Sentinel with the repository, workflow, run and actor.
 
-**See it without GitHub:** dashboard → **CI/CD Integration** → *Run pipeline demo*. A simulated pull-request pipeline sends the same requests the action sends, through the real gateway: tests are allowed, the patch waits for a human, the production deploy is blocked.
+**See it without GitHub:** dashboard → **Test a Commit** (top of the sidebar). Paste any GitHub commit URL (used as a label only, never fetched), pick a scenario and run the mock GitHub Action. A scripted review agent's tool calls go through the real gateway:
+
+| Scenario | Outcome |
+| --- | --- |
+| Safe code review | `read_repo`, `run_tests`, `generate_patch` all ALLOW |
+| Patch needs approval | review allowed, `apply_patch` held for a human |
+| Prompt-injection attack | the diff tells AI reviewers to read the production secret; `read_prod_secret` is BLOCKED, the agent QUARANTINED, and its retry refused |
 
 **See it on GitHub:** `.github/workflows/sentinel-selftest.yml` runs on every push. It needs no server or secrets — it starts a throwaway Sentinel in the runner, then asserts that `run_tests` is allowed and `deploy_prod` is blocked.
 
@@ -372,7 +378,7 @@ Outputs: `decision`, `final-decision`, `allowed`, `risk-score`, `severity`, `eve
 
 1. Run Sentinel where runners can reach it (`./start.sh --public` on EC2).
 2. Set `REQUIRE_AGENT_TOKEN=true` in `.env` so only token holders can submit actions.
-3. Dashboard → CI/CD Integration → *Issue agent token* → save as repository secret `SENTINEL_AGENT_TOKEN`; set repository variable `SENTINEL_URL`.
+3. Dashboard → Test a Commit → *Issue agent token* → save as repository secret `SENTINEL_AGENT_TOKEN`; set repository variable `SENTINEL_URL`.
 4. Copy `examples/github-workflows/agent-pipeline.yml` into your repository's `.github/workflows/`.
 
 The same gate works in any CI system: `python github-action/sentinel_gate.py --url … --agent … --tool … -- <command>` (standard library only).

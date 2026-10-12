@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, BarChart3, Bot, Brain, ClipboardList, FlaskConical, Network, PlayCircle, Power, ScrollText, Search, Settings, Shield, WifiOff, Workflow,
+  Activity, AlertTriangle, BarChart3, Bot, Brain, ClipboardList, FlaskConical, Network, PlayCircle, Power, ScrollText, Search, GitCommitHorizontal, Settings, Shield, WifiOff,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -9,7 +9,9 @@ import type { Mode } from "../types";
 import { useDemo } from "./GuidedDemo";
 import { Button, Segmented, cx } from "./ui";
 
-const NAV: { to: string; label: string; icon: ReactNode; badge?: "alerts" | "approvals" }[] = [
+const NAV: { to: string; label: string; icon: ReactNode; badge?: "alerts" | "approvals"; start?: boolean }[] = [
+  { to: "/how-it-works", label: "How It Works", icon: <Brain className="h-4 w-4" />, start: true },
+  { to: "/integrations", label: "Test a Commit", icon: <GitCommitHorizontal className="h-4 w-4" />, start: true },
   { to: "/", label: "Security Operations", icon: <Shield className="h-4 w-4" /> },
   { to: "/agents", label: "Agents", icon: <Bot className="h-4 w-4" /> },
   { to: "/monitor", label: "Live Monitor", icon: <Activity className="h-4 w-4" /> },
@@ -20,8 +22,6 @@ const NAV: { to: string; label: string; icon: ReactNode; badge?: "alerts" | "app
   { to: "/redteam", label: "Red Team Lab", icon: <FlaskConical className="h-4 w-4" /> },
   { to: "/metrics", label: "Metrics", icon: <BarChart3 className="h-4 w-4" /> },
   { to: "/audit", label: "Audit Trail", icon: <ClipboardList className="h-4 w-4" /> },
-  { to: "/integrations", label: "CI/CD Integration", icon: <Workflow className="h-4 w-4" /> },
-  { to: "/how-it-works", label: "How It Works", icon: <Brain className="h-4 w-4" /> },
   { to: "/settings", label: "Settings", icon: <Settings className="h-4 w-4" /> },
 ];
 
@@ -38,9 +38,10 @@ function Sidebar() {
         </div>
       </div>
       <nav className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Main">
-        {NAV.map((item) => (
+        {NAV.map((item, i) => (
+          <div key={item.to}>
+          {i === 2 && <div className="mx-3 my-2 border-t border-slate-800" />}
           <NavLink
-            key={item.to}
             to={item.to}
             end={item.to === "/"}
             className={({ isActive }) =>
@@ -49,10 +50,12 @@ function Sidebar() {
           >
             {item.icon}
             <span className="flex-1">{item.label}</span>
+            {item.start && <span className="rounded bg-blue-600/25 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-blue-300">Start</span>}
             {item.badge && badges[item.badge] > 0 && (
               <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">{badges[item.badge]}</span>
             )}
           </NavLink>
+          </div>
         ))}
       </nav>
       <div className="border-t border-slate-800 px-5 py-4">

@@ -16,17 +16,41 @@ def intercept(client, **body):
     return client.post("/api/actions/intercept", json={"agent_id": CODING, **body}).json()
 
 
-def test_pipeline_demo_allows_tests_holds_patch_blocks_deploy(client):
-    for _ in range(2):  # reproducible on repeat
-        run = client.post("/api/integrations/github/demo").json()
-        assert [(j["job"], j["response"]["decision"], j["outcome"], j["command_ran"]) for j in run["jobs"]] == [
-            ("test", "ALLOW", "success", True),
-            ("patch", "REVIEW", "waiting", False),
-            ("deploy", "BLOCK", "failure", False),
-        ]
-        assert run["agent"]["status"] == "RUNNING"  # a blocked deploy is not a quarantine trigger
-    event = client.get(f"/api/events/{run['jobs'][2]['response']['event_id']}").json()
+def mock_run(client, scenario, **extra):
+    return client.post("/api/integrations/github/run", json={"scenario": scenario, **extra})
+
+
+@pytest.mark.parametrize(
+    "scenario, decisions, conclusion, agent_status",
+    [
+        ("safe_review", ["ALLOW", "ALLOW", "ALLOW"], "success", "RUNNING"),
+        ("patch_approval", ["ALLOW", "ALLOW", "ALLOW", "REVIEW"], "waiting", "RUNNING"),
+        ("prompt_injection", ["ALLOW", "BLOCK", "BLOCK"], "failure", "QUARANTINED"),
+    ],
+)
+def test_mock_github_run_outcomes(client, scenario, decisions, conclusion, agent_status):
+    for _ in range(2):  # reproducible on repeat, even after a quarantine
+        run = mock_run(client, scenario).json()
+        assert [s["response"]["decision"] for s in run["steps"]] == decisions
+        assert (run["conclusion"], run["agent"]["status"], run["matches_expected"]) == (conclusion, agent_status, True)
+
+
+def test_mock_run_injection_is_detected_and_retry_is_refused(client):
+    steps = mock_run(client, "prompt_injection").json()["steps"]
+    assert steps[1]["response"]["event"]["injection_detected"] is True
+    assert steps[1]["response"]["quarantine"] is True
+    assert "QUARANTINED" in steps[2]["response"]["reasons"][0]  # the allowed tool no longer works
+
+
+def test_mock_run_uses_the_github_url_as_a_label_only(client):
+    run = mock_run(client, "safe_review", commit_url="https://github.com/acme/storefront/commit/ABCDEF1234567", trigger="pull_request").json()
+    assert (run["repository"], run["sha"], run["trigger"]) == ("acme/storefront", "abcdef1234567", "pull_request")
+    event = client.get(f"/api/events/{run['steps'][0]['response']['event_id']}").json()
     assert event["source"] == "github-actions" and event["context"]["repository"] == "acme/storefront"
+    assert mock_run(client, "safe_review", commit_url="https://github.com/acme/storefront").json()["repository"] == "acme/storefront"
+    for bad in ("not a url", "https://gitlab.com/acme/storefront", "https://github.com/acme"):
+        assert mock_run(client, "safe_review", commit_url=bad).status_code == 422
+    assert mock_run(client, "nope").status_code == 404
 
 
 def test_ci_can_poll_a_held_action_until_a_human_decides(client):

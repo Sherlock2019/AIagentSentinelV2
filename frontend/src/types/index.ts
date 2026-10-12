@@ -297,9 +297,39 @@ export interface PipelineRun {
   jobs: PipelineJob[];
 }
 
+export interface GithubScenario {
+  id: string;
+  title: string;
+  summary: string;
+  expected: "ALLOW" | "REVIEW" | "BLOCK";
+  description: string;
+  commit: { message: string; branch: string; diff: string };
+  steps: { name: string; tool: string; resource: string }[];
+}
+
 export interface GithubIntegrationInfo {
   require_agent_token: boolean;
-  demo_pipeline: { job: string; name: string; tool: string; resource: string; run: string; on_review: string }[];
+  default_commit_url: string;
+  triggers: { value: string; label: string }[];
+  agent_id: string;
+  scenarios: GithubScenario[];
+}
+
+export interface GithubMockRun {
+  scenario: string;
+  repository: string;
+  sha: string;
+  pull: string | null;
+  branch: string;
+  message: string;
+  trigger: string;
+  run_id: string;
+  conclusion: "success" | "waiting" | "failure";
+  expected: string;
+  matches_expected: boolean;
+  agent: Agent;
+  steps: { index: number; name: string; tool: string; resource: string; status: "success" | "waiting" | "failure"; response: InterceptResponse }[];
+  evidence: { events: string[]; alerts: number };
 }
 
 export interface Catalog {

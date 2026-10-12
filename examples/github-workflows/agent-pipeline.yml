@@ -4,7 +4,7 @@
 #   1. Run AgentSentinel somewhere the runner can reach (e.g. EC2: ./start.sh --public).
 #   2. Repository variable  SENTINEL_URL          = http://<host>:5173
 #   3. Repository secret    SENTINEL_AGENT_TOKEN  = token from the dashboard (Integrations page)
-#   4. Replace  your-org/agentsentinel  with where you host this repository.
+#   4. Action reference below points at Sherlock2019/AIagentSentinelV2.
 name: Guarded AI agent pipeline
 
 on:
@@ -22,7 +22,7 @@ jobs:
 
       # Allowed by CodingAgent's policy: runs straight away.
       - name: Agent runs the tests
-        uses: your-org/agentsentinel/github-action@main
+        uses: Sherlock2019/AIagentSentinelV2/github-action@main
         with:
           sentinel-url: ${{ vars.SENTINEL_URL }}
           agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
@@ -34,7 +34,7 @@ jobs:
 
       # Approval-required: the job pauses until an administrator approves it in the dashboard.
       - name: Agent applies its patch
-        uses: your-org/agentsentinel/github-action@main
+        uses: Sherlock2019/AIagentSentinelV2/github-action@main
         with:
           sentinel-url: ${{ vars.SENTINEL_URL }}
           agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
@@ -48,7 +48,7 @@ jobs:
 
       # Denied by policy: Sentinel blocks it, the job fails, the deploy never starts.
       - name: Agent tries to deploy to production
-        uses: your-org/agentsentinel/github-action@main
+        uses: Sherlock2019/AIagentSentinelV2/github-action@main
         with:
           sentinel-url: ${{ vars.SENTINEL_URL }}
           agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
