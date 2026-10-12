@@ -17,12 +17,34 @@ It intercepts AI-agent actions before they reach tools or systems and combines:
 > **AI agents should not police themselves.**
 > Define what they are allowed to do. Intercept what they try to do. Verify their intent. Block unauthorized actions. Keep humans in control.
 
+## Quick start
+
 ```bash
-chmod +x start.sh
-./start.sh          # then open http://localhost:5173 and click RUN GUIDED DEMO
+git clone git@github.com:Sherlock2019/AIagentSentinelV2.git
+cd AIagentSentinelV2
+chmod +x start.sh stop.sh
+./start.sh       # starts in the background and returns to the prompt
 ```
 
+Open **http://localhost:5173** (the address is printed by `start.sh`). Stop with `./stop.sh`.
+
 No Docker, no sudo, no API keys, no internet at runtime. Everything an agent can touch is simulated.
+
+## Take the tour
+
+The top of the sidebar is a guided path for a first visit:
+
+| Page | What you see |
+| --- | --- |
+| **What It Does** | The purpose in plain language: the risks of AI agents with tools, and what Sentinel does about each |
+| **How It Works** | Interactive architecture diagram (normal, review and dangerous paths; click any node), intended vs actual behaviour, security principles |
+| **Test Demo** | Chat with an AI agent and try to make it misbehave. Each request becomes a tool call that Sentinel allows, holds or blocks live, with the reasoning shown |
+| **Test a Commit** | Mock GitHub commit review: paste a commit URL, pick a scenario (safe, needs approval, prompt injection) and watch each tool call checked |
+| **GitHub CI/CD** | A GitHub Actions run gated by Sentinel (tests allowed, patch held, deploy blocked), approve or reject inline, then setup steps and a workflow generator |
+
+Or click **RUN GUIDED DEMO** (top right) for an 11-step, five-minute walkthrough.
+
+The rest of the dashboard: Security Operations, Agents, Live Monitor, Alerts, Event Inspector, Capability Map, Policy Studio, Red Team Lab, Metrics, Audit Trail, Settings. **Recruiter mode / Engineer mode** (top bar) switches between a plain-English story and the full evaluation (policy checks, judge scores, risk formula, raw JSON, timings).
 
 ---
 
@@ -86,12 +108,13 @@ B --> M[Audit Log]
 | Backend | Python 3.11+, FastAPI, Pydantic 2, SQLAlchemy 2 |
 | Database | SQLite by default; PostgreSQL via `DATABASE_URL` |
 | Safety judge | Provider abstraction: `mock` (default), Ollama, OpenAI, Gemini, Anthropic |
+| CI/CD | GitHub Action (composite) + standard-library gate script |
 
 ```
-agentsentinel/
+.
   backend/app/
     main.py                  FastAPI app, /health
-    api/                     agents, actions, alerts, policies, audit, metrics, redteam, system
+    api/                     agents, actions, alerts, policies, audit, metrics, redteam, system, integrations
     sentinel/
       gateway.py             the choke point: intercept() and human approval
       policy_engine.py       deterministic rules, YAML parse / validate
@@ -105,8 +128,11 @@ agentsentinel/
     providers/               base, mock, ollama, openai, gemini, anthropic
     simulator/               demo agents, simulated tools, red-team scenarios
     models/  schemas/  database/
-  backend/tests/             49 tests
+  backend/tests/             63 tests
   frontend/src/              pages, components, hooks, api, types
+  github-action/             action.yml + sentinel_gate.py (the CI/CD gate)
+  examples/github-workflows/ agent-pipeline.yml (template for your repository)
+  .github/workflows/         sentinel-selftest.yml (CI + live demo of the action)
   data/                      policies (YAML export), fixtures, SQLite file
   scripts/                   seed_demo.py, run_scenarios.py
   start.sh  stop.sh  docker-compose.yml  .env.example
@@ -114,7 +140,7 @@ agentsentinel/
 
 ## How it Works
 
-Every simulated tool call is submitted to `POST /api/actions/intercept`. The gateway then:
+Every tool call is submitted to `POST /api/actions/intercept`. The gateway then:
 
 1. **Authenticates** the agent and checks its state — a quarantined, paused or disabled agent is refused here, before any evaluation.
 2. Loads the agent's **declared intent** (its policy).
@@ -221,7 +247,7 @@ Design rules:
 - **Injection scan is deterministic.** Indicators such as "ignore all previous instructions" are detected by pattern, and a model that was itself fooled cannot lower that score.
 - **Model output is untrusted**: scores are clamped and the decision is whitelisted.
 
-Set `AI_PROVIDER` in `.env` to `ollama`, `openai`, `gemini` or `anthropic` to use a real model. `mock` produces the same structure from transparent rules, so the whole product is reproducible offline.
+Set `AI_PROVIDER` in `.env` to `ollama`, `openai`, `gemini` or `anthropic` to use a real model, with that provider's API key and model name (`OPENAI_MODEL`, `GEMINI_MODEL`, `ANTHROPIC_MODEL`, `OLLAMA_MODEL`). `mock` produces the same structure from transparent rules, so the whole product is reproducible offline.
 
 ## Behavior Monitor
 
@@ -269,7 +295,7 @@ Agent states: `RUNNING`, `PAUSED`, `REVIEW`, `QUARANTINED`, `DISABLED`.
 
 Automatic quarantine triggers: secret access, IAM modification, disabling audit logging, modifying or bypassing Sentinel, critical exfiltration, and **3 blocked actions within 60 seconds**. A runaway loop pauses the agent.
 
-When an agent is quarantined: every future action is refused at the gateway, pending actions are cancelled, the simulated session token is revoked, the event is audited and a CRITICAL alert is raised. Only an administrator can restore it (a new session is issued).
+When an agent is quarantined: every future action is refused at the gateway, pending actions are cancelled, the session token is revoked, the event is audited and a CRITICAL alert is raised. Only an administrator can restore it (a new session is issued).
 
 ## Kill Switch
 
@@ -304,39 +330,44 @@ Engineer mode adds a console to send any custom action to the gateway.
 Requirements: Python 3.11+, Node.js 18+, npm.
 
 ```bash
-chmod +x start.sh stop.sh
-./start.sh
+./start.sh     # start (background)
+./stop.sh      # stop
+tail -f .run/backend.log .run/frontend.log   # logs
 ```
 
-`start.sh` creates `.venv`, installs backend and frontend dependencies only when they changed, copies `.env.example` to `.env`, initializes and seeds the database, starts FastAPI on `127.0.0.1:8000`, waits for `/health`, starts Vite on `127.0.0.1:5173`, then **returns to the prompt with both running in the background** (they survive logout). Stop them with `./stop.sh`.
+`start.sh` creates `.venv`, installs backend and frontend dependencies only when they changed, copies `.env.example` to `.env`, initializes and seeds the database, starts FastAPI and Vite, waits until both are up, prints the URLs, then **returns to the prompt with both running in the background**. They keep running after you close the terminal or log out.
 
-| | |
+| | Default |
 | --- | --- |
 | Dashboard | http://localhost:5173 |
 | FastAPI | http://localhost:8000 |
 | API docs | http://localhost:8000/docs |
 | Health | http://localhost:8000/health |
 
-- `./start.sh` always starts fresh: it stops a previous run and **kills whatever is listening on its two ports** (an older copy, an orphan, a stray server) before launching.
-- `./stop.sh` stops them. If a port is held by something `start.sh` cannot stop, it moves to the next free port and says so.
-- Other ports: `SENTINEL_BACKEND_PORT=8010 SENTINEL_FRONTEND_PORT=5183 ./start.sh`.
+Ports:
+
+- `start.sh` always starts fresh: it stops a previous run and anything **you own** that listens on its ports (an older copy, an orphan, a stray server).
+- If a port is held by something it cannot stop (root, another user, a container), it first tries passwordless `sudo`; failing that, it **moves to the next free port** and prints which one it used. The dashboard still works, because it reaches the backend internally.
+- Choose ports yourself with `SENTINEL_BACKEND_PORT=8010 SENTINEL_FRONTEND_PORT=5183 ./start.sh`.
+
+Other:
+
+- Optional Docker: `docker compose up`.
+- Reset the demo data: `python scripts/seed_demo.py --reset` or Settings → Reset demo data.
 
 ### Run on AWS EC2 (public IP)
 
 ```bash
-# on the instance (Ubuntu): Python 3.11+, Node 18+, then
-git clone <your repo> && cd agentsentinel      # or scp the folder
+# on the instance (Ubuntu, Python 3.11+, Node 18+)
+git clone git@github.com:Sherlock2019/AIagentSentinelV2.git && cd AIagentSentinelV2
 chmod +x start.sh stop.sh
 ./start.sh            # detects EC2 and prints  http://<public-ip>:5173
 ```
 
 - On EC2, `start.sh` reads the public IP from the instance metadata service and switches to **public mode** automatically. Force it anywhere with `./start.sh --public`; force localhost-only with `./start.sh --local`.
-- In public mode only the dashboard port (5173) listens on all interfaces. The API stays bound to `127.0.0.1` and is reached through the dashboard: `/api`, `/health`, `/docs`.
-- In the instance's **security group**, add an inbound rule: Custom TCP, port 5173. **Source: "My IP"**, not `0.0.0.0/0` — this POC has no login, so anyone who can reach the port can use every admin control.
-- It keeps running after you log out; stop it with `./stop.sh`.
-- Logs: `.run/backend.log`, `.run/frontend.log`.
-- Optional Docker: `docker compose up`.
-- Reset the demo data: `python scripts/seed_demo.py --reset` or Settings → Reset demo data.
+- In public mode only the dashboard port listens on all interfaces. The API stays bound to `127.0.0.1` and is reached through the dashboard: `/api`, `/health`, `/docs`.
+- In the instance's **security group**, add an inbound rule: Custom TCP on the dashboard port `start.sh` prints (5173 by default). **Source: "My IP"**, not `0.0.0.0/0` — this POC has no login, so anyone who can reach the port can use every admin control.
+- Update later with `git pull && ./start.sh`.
 
 ## GitHub Actions integration
 
@@ -354,7 +385,7 @@ For AI agents that work inside CI/CD (coding agents, release bots), wrap their s
   uses: Sherlock2019/AIagentSentinelV2/github-action@main
   with:
     sentinel-url: ${{ vars.SENTINEL_URL }}            # e.g. http://<ec2-public-ip>:5173
-    agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}  # issued on the CI/CD Integration page
+    agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}  # issued on the GitHub CI/CD page
     agent-id: coding-agent
     tool: deploy_prod
     resource: production/storefront
@@ -364,7 +395,10 @@ For AI agents that work inside CI/CD (coding agents, release bots), wrap their s
 
 Outputs: `decision`, `final-decision`, `allowed`, `risk-score`, `severity`, `event-id`, `agent-status`, `inspector-url`. Each decision is written to the job summary and recorded in Sentinel with the repository, workflow, run and actor.
 
-**See it without GitHub:** dashboard → **Test a Commit** (top of the sidebar). Paste any GitHub commit URL (used as a label only, never fetched), pick a scenario and run the mock GitHub Action. A scripted review agent's tool calls go through the real gateway:
+**See it in the dashboard (no GitHub needed):**
+
+- **GitHub CI/CD** — a GitHub Actions–style run of a three-job pull-request pipeline: `test` is allowed, `patch` waits for review (approve or reject it on the page and the job log updates), `deploy` is blocked. Job logs, annotations and job summaries look like the real action's output.
+- **Test a Commit** — paste any GitHub commit URL (a label only, never fetched) and pick a scenario:
 
 | Scenario | Outcome |
 | --- | --- |
@@ -372,20 +406,22 @@ Outputs: `decision`, `final-decision`, `allowed`, `risk-score`, `severity`, `eve
 | Patch needs approval | review allowed, `apply_patch` held for a human |
 | Prompt-injection attack | the diff tells AI reviewers to read the production secret; `read_prod_secret` is BLOCKED, the agent QUARANTINED, and its retry refused |
 
+In both, the GitHub side is mocked; every decision comes from the real gateway.
+
 **See it on GitHub:** `.github/workflows/sentinel-selftest.yml` runs on every push. It needs no server or secrets — it starts a throwaway Sentinel in the runner, then asserts that `run_tests` is allowed and `deploy_prod` is blocked.
 
 **Use it for real:**
 
-1. Run Sentinel where runners can reach it (`./start.sh --public` on EC2).
+1. Run Sentinel where runners can reach it (EC2, above).
 2. Set `REQUIRE_AGENT_TOKEN=true` in `.env` so only token holders can submit actions.
-3. Dashboard → Test a Commit → *Issue agent token* → save as repository secret `SENTINEL_AGENT_TOKEN`; set repository variable `SENTINEL_URL`.
-4. Copy `examples/github-workflows/agent-pipeline.yml` into your repository's `.github/workflows/`.
+3. Dashboard → GitHub CI/CD → *Issue agent token* → save as repository secret `SENTINEL_AGENT_TOKEN`; set repository variable `SENTINEL_URL`.
+4. Copy `examples/github-workflows/agent-pipeline.yml` into your repository's `.github/workflows/`, or use the workflow generator on the same page.
 
 The same gate works in any CI system: `python github-action/sentinel_gate.py --url … --agent … --tool … -- <command>` (standard library only).
 
 **Limit to understand:** a workflow step is a checkpoint the pipeline chooses to call. It guards the steps you wrap, not an agent that reaches tools another way. For production runtime agents, route the tools themselves through the gateway (tool/MCP proxy holding the credentials) so there is no path around it.
 
-## Demo
+## Guided demo
 
 Click **RUN GUIDED DEMO** (top right). Eleven steps, about five minutes:
 
@@ -401,12 +437,6 @@ Click **RUN GUIDED DEMO** (top right). Eleven steps, about five minutes:
 10. Capability map: the dangerous transitive path
 11. Admin chooses **KEEP QUARANTINED** → summary: 3 actions, 1 allowed, 1 reviewed, 1 blocked, 1 agent quarantined, 1 admin alert
 
-**Recruiter mode / Engineer mode** (top bar) switch the whole UI between a four-sentence plain-English story and the full evaluation: policy checks, judge scores, risk formula, raw JSON, request IDs, timings.
-
-**Start here** (top of the sidebar): **What It Does** (the purpose, in plain language) → **How It Works** (interactive architecture) → **Test Demo** (chat with an AI agent and try to make it misbehave; Sentinel decides live) → **Test a Commit** (mock GitHub commit review) → **GitHub CI/CD** (a GitHub Actions run gated by Sentinel, with approve/reject, plus setup and a workflow generator).
-
-Other pages: Security Operations, Agents, Live Monitor, Alerts, Event Inspector, Capability Map, Policy Studio, Red Team Lab, Metrics, Audit Trail, How It Works, Settings.
-
 ## API
 
 | Method | Path | Purpose |
@@ -417,6 +447,7 @@ Other pages: Security Operations, Agents, Live Monitor, Alerts, Event Inspector,
 | POST | `/api/agents/{id}/pause` `resume` `quarantine` `kill` | Containment controls |
 | POST | `/api/actions/intercept` | **The gateway** |
 | GET | `/api/actions/pending` | Human approval queue |
+| GET | `/api/actions/{id}` | One action's status (CI polls this while waiting for approval) |
 | POST | `/api/actions/{id}/approve` `reject` | Resolve a held action |
 | GET | `/api/events`, `/api/events/{id}` | Decisions (filters: agent, decision, severity, tool, time) |
 | GET | `/api/alerts` | Alerts |
@@ -429,6 +460,10 @@ Other pages: Security Operations, Agents, Live Monitor, Alerts, Event Inspector,
 | POST | `/api/redteam/run` | Run a scenario |
 | GET | `/api/metrics` | Totals and chart series |
 | GET | `/api/audit`, `/api/audit/verify`, `/api/audit/export?format=json\|csv` | Audit trail, hash-chain check, export |
+| GET | `/api/integrations/github` | Test a Commit scenarios and settings |
+| POST | `/api/integrations/github/run` | Mock commit review through the gateway |
+| GET / POST | `/api/integrations/github/pipeline` (`/run`) | GitHub Actions pipeline demo |
+| POST | `/api/integrations/agents/{id}/token` | Issue (rotate) an agent token for CI |
 | POST | `/api/system/emergency-stop` (`/release`) | Global kill switch |
 | GET / PUT | `/api/system/settings` | Thresholds, auto-quarantine, channels, policy mode |
 | POST | `/api/system/reset` | Re-seed demo data |
@@ -439,23 +474,33 @@ curl -s -X POST http://localhost:8000/api/actions/intercept \
   -d @data/fixtures/intercept_request.example.json
 ```
 
+## Configuration (`.env`)
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AI_PROVIDER` | `mock` | Safety judge: `mock`, `ollama`, `openai`, `gemini`, `anthropic` |
+| `*_API_KEY`, `*_MODEL` | empty | Credentials and model for the chosen provider |
+| `DATABASE_URL` | SQLite in `data/` | PostgreSQL: `postgresql+psycopg://…` |
+| `REQUIRE_AGENT_TOKEN` | `false` | Require the agent's token on every external gateway call — turn on before exposing Sentinel |
+| `ALERT_WEBHOOK_URL` | empty | Real webhook delivery (otherwise simulated) |
+
 ## Tests
 
 ```bash
 source .venv/bin/activate
-cd backend && python -m pytest -q          # 49 tests, isolated temp database
+cd backend && python -m pytest -q          # 63 tests, isolated temp database
 python ../scripts/run_scenarios.py         # scenario scorecard against the configured database
 cd ../frontend && npm run build            # type-check + production build
 ```
 
-The tests prove, among others: allowed tool passes · denied tool blocks · unknown tool is denied by default · approval-required tool enters REVIEW · secret access and IAM escalation block · critical violation quarantines · a quarantined agent cannot act · three blocks trigger quarantine · the global kill switch blocks every agent · policy DENY overrides the LLM · the LLM cannot override a deterministic DENY or a required approval · LLM failure fails safe · the capability graph finds the transitive path · prompt injection blocks · audit records are created and tampering is detected · an admin alert is generated · every scenario is deterministic.
+The tests prove, among others: allowed tool passes · denied tool blocks · unknown tool is denied by default · approval-required tool enters REVIEW · secret access and IAM escalation block · critical violation quarantines · a quarantined agent cannot act · three blocks trigger quarantine · the global kill switch blocks every agent · policy DENY overrides the LLM · the LLM cannot override a deterministic DENY or a required approval · LLM failure fails safe · the capability graph finds the transitive path · prompt injection blocks · audit records are created and tampering is detected · an admin alert is generated · every scenario is deterministic · the GitHub gate runs the command on ALLOW, never on BLOCK, and fails closed when Sentinel is unreachable · agent tokens rotate and are enforced · the CI/CD and commit demos give their expected outcomes.
 
 ## Scope and limits
 
 This is a proof of concept.
 
-- All agents, tools, secrets, databases and network destinations are **simulated**. Nothing real is called, read or modified.
+- All agents, tools, secrets, databases and network destinations are **simulated**. Nothing real is called, read or modified. The demo agents' "brains" are transparent scripts; Sentinel's decisions are real.
 - Email and Slack notifications are simulated (payloads are stored and displayed). A webhook is POSTed only if `ALERT_WEBHOOK_URL` is set and the channel is enabled.
-- There is no authentication on the admin UI or API; the "session token" is a demo credential. A real deployment needs admin auth, signed agent identities and network placement that makes the gateway the only route to tools.
+- There is no authentication on the admin UI or API. Agent tokens are optional unless `REQUIRE_AGENT_TOKEN=true`. A real deployment needs admin auth, signed agent identities and network placement that makes the gateway the only route to tools.
 - The audit log is tamper-**evident** (hash-chained), not tamper-proof storage.
 - The capability graph is a predefined model, not discovered from live infrastructure.
