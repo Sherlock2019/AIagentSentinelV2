@@ -1,0 +1,127 @@
+name: "AgentSentinel Gate"
+description: "Ask AgentSentinel before an AI-agent step runs: ALLOW runs it, BLOCK fails the job, REVIEW waits for a human."
+author: "AgentSentinel"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  sentinel-url:
+    description: "Base URL of your AgentSentinel (e.g. http://<host>:5173). Not needed when start-local is true."
+    required: false
+    default: ""
+  agent-id:
+    description: "Registered agent id this step acts as (e.g. coding-agent)."
+    required: true
+  tool:
+    description: "Tool the step is about to use (e.g. run_tests, apply_patch, deploy_prod)."
+    required: true
+  resource:
+    description: "Resource it targets (e.g. source_repo/my-service, production/storefront)."
+    required: false
+    default: ""
+  operation:
+    description: "READ / WRITE / EXECUTE / DELETE. Defaults to the tool's own operation."
+    required: false
+    default: ""
+  task:
+    description: "What the agent was asked to do (shown to reviewers and the safety judge)."
+    required: false
+    default: ""
+  arguments:
+    description: "JSON object of tool arguments."
+    required: false
+    default: "{}"
+  agent-token:
+    description: "Agent session token. Store it as a repository secret. Required when the server sets REQUIRE_AGENT_TOKEN=true."
+    required: false
+    default: ""
+  on-review:
+    description: "When Sentinel requires human approval: fail (default), wait (poll until approved/rejected), or pass."
+    required: false
+    default: "fail"
+  review-timeout:
+    description: "Seconds to wait for a human decision when on-review is wait."
+    required: false
+    default: "600"
+  on-error:
+    description: "If Sentinel cannot be reached: fail (fail closed, default) or pass."
+    required: false
+    default: "fail"
+  run:
+    description: "Optional shell command to run ONLY if the action is allowed."
+    required: false
+    default: ""
+  start-local:
+    description: "Start a throwaway AgentSentinel inside the runner (demo / policy tests). Needs this repository checked out."
+    required: false
+    default: "false"
+
+outputs:
+  decision:
+    description: "Sentinel's decision: ALLOW, REVIEW or BLOCK."
+    value: ${{ steps.gate.outputs.decision }}
+  final-decision:
+    description: "Outcome after on-review handling: ALLOW or BLOCK/REVIEW."
+    value: ${{ steps.gate.outputs.final-decision }}
+  allowed:
+    description: "'true' if the step may proceed."
+    value: ${{ steps.gate.outputs.allowed }}
+  risk-score:
+    description: "Risk score 0-100."
+    value: ${{ steps.gate.outputs.risk-score }}
+  severity:
+    description: "LOW, MEDIUM, HIGH or CRITICAL."
+    value: ${{ steps.gate.outputs.severity }}
+  event-id:
+    description: "Sentinel event id (audit evidence)."
+    value: ${{ steps.gate.outputs.event-id }}
+  agent-status:
+    description: "Agent state after the decision (e.g. RUNNING, QUARANTINED)."
+    value: ${{ steps.gate.outputs.agent-status }}
+  inspector-url:
+    description: "Link to the event in the Sentinel dashboard."
+    value: ${{ steps.gate.outputs.inspector-url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Start local AgentSentinel
+      if: ${{ inputs.start-local == 'true' }}
+      shell: bash
+      env:
+        AI_PROVIDER: mock
+      run: |
+        # The action lives in <repo>/github-action; the backend is its sibling.
+        BACKEND="$GITHUB_ACTION_PATH/../backend"
+        [ -d "$BACKEND" ] || { echo "::error title=AgentSentinel::start-local needs the AgentSentinel repository checked out (backend/ not found)"; exit 1; }
+        if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+          echo "Local AgentSentinel already running"; exit 0
+        fi
+        python3 -m pip install --quiet --disable-pip-version-check -r "$BACKEND/requirements.txt"
+        (cd "$BACKEND" && nohup python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level warning > "$RUNNER_TEMP/agentsentinel.log" 2>&1 &)
+        for i in $(seq 1 60); do
+          curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1 && { echo "Local AgentSentinel is healthy"; exit 0; }
+          sleep 0.5
+        done
+        cat "$RUNNER_TEMP/agentsentinel.log"; echo "::error title=AgentSentinel::local server did not become healthy"; exit 1
+
+    - name: AgentSentinel gate
+      id: gate
+      shell: bash
+      # Inputs travel as environment variables, never interpolated into the script,
+      # so an attacker-controlled value (branch name, PR title) cannot inject shell.
+      env:
+        SENTINEL_URL: ${{ inputs.start-local == 'true' && 'http://127.0.0.1:8000' || inputs.sentinel-url }}
+        SENTINEL_AGENT_ID: ${{ inputs.agent-id }}
+        SENTINEL_TOOL: ${{ inputs.tool }}
+        SENTINEL_RESOURCE: ${{ inputs.resource }}
+        SENTINEL_OPERATION: ${{ inputs.operation }}
+        SENTINEL_TASK: ${{ inputs.task }}
+        SENTINEL_ARGUMENTS: ${{ inputs.arguments }}
+        SENTINEL_AGENT_TOKEN: ${{ inputs.agent-token }}
+        SENTINEL_ON_REVIEW: ${{ inputs.on-review }}
+        SENTINEL_REVIEW_TIMEOUT: ${{ inputs.review-timeout }}
+        SENTINEL_ON_ERROR: ${{ inputs.on-error }}
+        SENTINEL_RUN: ${{ inputs.run }}
+      run: python3 "$GITHUB_ACTION_PATH/sentinel_gate.py"

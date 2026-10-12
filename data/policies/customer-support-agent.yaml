@@ -1,0 +1,42 @@
+agent: CustomerSupportAgent
+purpose:
+- customer_support
+allow:
+- search_kb
+- get_ticket
+- create_ticket
+- workflow_api
+require_approval:
+- refund_customer
+deny:
+- read_secret
+- execute_shell
+- modify_iam
+- delete_customer
+- customer_db_write
+resources:
+  allow:
+  - knowledge_base
+  - support_db
+  - workflow
+  - crm
+  - payments
+  - customer_database:READ
+  deny:
+  - production_secrets
+  - payroll
+  - iam
+  - customer_database:WRITE
+  - customer_database:DELETE
+network:
+  allow: []
+limits:
+  rate_per_minute: 30
+  cost_per_minute_usd: 1.0
+quarantine_rules:
+- secret_access
+- iam_modification
+- audit_tampering
+- sentinel_bypass
+- critical_exfiltration
+- repeated_blocks

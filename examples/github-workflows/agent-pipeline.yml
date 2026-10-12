@@ -1,0 +1,59 @@
+# Copy to .github/workflows/agent-pipeline.yml in the repository whose AI agent you want to guard.
+#
+# Setup:
+#   1. Run AgentSentinel somewhere the runner can reach (e.g. EC2: ./start.sh --public).
+#   2. Repository variable  SENTINEL_URL          = http://<host>:5173
+#   3. Repository secret    SENTINEL_AGENT_TOKEN  = token from the dashboard (Integrations page)
+#   4. Replace  your-org/agentsentinel  with where you host this repository.
+name: Guarded AI agent pipeline
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coding-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Allowed by CodingAgent's policy: runs straight away.
+      - name: Agent runs the tests
+        uses: your-org/agentsentinel/github-action@main
+        with:
+          sentinel-url: ${{ vars.SENTINEL_URL }}
+          agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
+          agent-id: coding-agent
+          tool: run_tests
+          resource: ci_sandbox/${{ github.event.repository.name }}
+          task: Review pull request and run the test suite
+          run: echo "replace with your real test command, e.g. npm test"
+
+      # Approval-required: the job pauses until an administrator approves it in the dashboard.
+      - name: Agent applies its patch
+        uses: your-org/agentsentinel/github-action@main
+        with:
+          sentinel-url: ${{ vars.SENTINEL_URL }}
+          agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
+          agent-id: coding-agent
+          tool: apply_patch
+          resource: source_repo/${{ github.event.repository.name }}
+          task: Apply the generated fix
+          on-review: wait
+          review-timeout: "900"
+          run: echo "replace with the command that applies the agent's patch"
+
+      # Denied by policy: Sentinel blocks it, the job fails, the deploy never starts.
+      - name: Agent tries to deploy to production
+        uses: your-org/agentsentinel/github-action@main
+        with:
+          sentinel-url: ${{ vars.SENTINEL_URL }}
+          agent-token: ${{ secrets.SENTINEL_AGENT_TOKEN }}
+          agent-id: coding-agent
+          tool: deploy_prod
+          resource: production/${{ github.event.repository.name }}
+          task: Review pull request and run the test suite
+          run: ./deploy.sh

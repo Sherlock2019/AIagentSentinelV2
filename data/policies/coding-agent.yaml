@@ -1,0 +1,36 @@
+agent: CodingAgent
+purpose:
+- code_review
+allow:
+- read_repo
+- run_tests
+- generate_patch
+require_approval:
+- apply_patch
+deny:
+- read_prod_secret
+- deploy_prod
+- modify_iam
+- disable_logging
+resources:
+  allow:
+  - source_repo
+  - ci_sandbox
+  deny:
+  - production_secrets
+  - production
+  - iam
+  - audit_log
+  - sentinel_policy
+network:
+  allow: []
+limits:
+  rate_per_minute: 40
+  cost_per_minute_usd: 1.0
+quarantine_rules:
+- secret_access
+- iam_modification
+- audit_tampering
+- sentinel_bypass
+- critical_exfiltration
+- repeated_blocks

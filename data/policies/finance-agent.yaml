@@ -1,0 +1,33 @@
+agent: FinanceAgent
+purpose:
+- financial_analysis
+allow:
+- read_transaction
+- calculate_summary
+require_approval:
+- create_payment_request
+deny:
+- execute_payment
+- modify_account
+- export_customer_database
+resources:
+  allow:
+  - transactions
+  - payments
+  deny:
+  - accounts
+  - customer_database
+  - production_secrets
+  - external_network
+network:
+  allow: []
+limits:
+  rate_per_minute: 25
+  cost_per_minute_usd: 1.0
+quarantine_rules:
+- secret_access
+- iam_modification
+- audit_tampering
+- sentinel_bypass
+- critical_exfiltration
+- repeated_blocks

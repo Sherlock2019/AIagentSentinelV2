@@ -1,0 +1,34 @@
+agent: ResearchAgent
+purpose:
+- market_research
+allow:
+- web_search_sim
+- read_public_doc
+- summarize
+require_approval: []
+deny:
+- upload_external
+- read_private_db
+- execute_shell
+resources:
+  allow:
+  - public_web
+  - public_docs
+  - workspace
+  deny:
+  - private_db
+  - production_secrets
+  - external_network
+  - customer_database
+network:
+  allow: []
+limits:
+  rate_per_minute: 20
+  cost_per_minute_usd: 1.0
+quarantine_rules:
+- secret_access
+- iam_modification
+- audit_tampering
+- sentinel_bypass
+- critical_exfiltration
+- repeated_blocks

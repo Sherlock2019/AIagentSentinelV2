@@ -1,0 +1,42 @@
+# Optional. ./start.sh is the primary way to run AgentSentinel and needs no Docker.
+#   docker compose up        -> http://localhost:5173
+services:
+  backend:
+    image: python:3.12-slim
+    working_dir: /app/backend
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      DATABASE_URL: sqlite:////app/data/agentsentinel.db
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      - ./backend:/app/backend
+      - ./data:/app/data
+    command: >
+      sh -c "pip install --quiet --no-cache-dir -r requirements.txt &&
+             python -m app.database.seed &&
+             python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  frontend:
+    image: node:22-slim
+    working_dir: /app/frontend
+    environment:
+      VITE_BACKEND_URL: http://backend:8000
+    volumes:
+      - ./frontend:/app/frontend
+      - frontend_node_modules:/app/frontend/node_modules
+    command: sh -c "npm ci --no-audit --no-fund && npx vite --host 0.0.0.0 --port 5173 --strictPort"
+    ports:
+      - "5173:5173"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  frontend_node_modules:

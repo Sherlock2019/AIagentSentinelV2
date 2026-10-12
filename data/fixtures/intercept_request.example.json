@@ -1,0 +1,9 @@
+{
+  "agent_id": "coding-agent",
+  "task": "Review this application source code.",
+  "tool": "read_prod_secret",
+  "resource": "AWS_PRODUCTION_TOKEN",
+  "operation": "READ",
+  "arguments": {},
+  "context": {}
+}

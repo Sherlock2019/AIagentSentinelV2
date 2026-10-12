@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  /* Status palette for charts (kept apart from UI accent colours). */
+  --color-viz-good: #0ca30c;
+  --color-viz-warning: #fab219;
+  --color-viz-serious: #ec835a;
+  --color-viz-critical: #d03b3b;
+  --animate-fade-in: fade-in 0.25s ease-out;
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-flash: flash 1.6s ease-out;
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes flash {
+    0% { background-color: rgb(254 226 226); }
+    100% { background-color: transparent; }
+  }
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: #f4f6f9;
+  color: #0f172a;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+button { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+/* Soft pulse for "live" indicators only. */
+.live-dot { position: relative; }
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  opacity: 0;
+  animation: live-ping 2s ease-out infinite;
+}
+@keyframes live-ping {
+  0% { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+.react-flow__attribution { display: none; }
+.react-flow__node { cursor: pointer; }
+.scroll-thin { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }

@@ -1,0 +1,74 @@
+# CI for this repository, and a live demonstration of the AgentSentinel GitHub Action.
+# Needs no server and no secrets: the gate jobs start a throwaway AgentSentinel inside the runner.
+name: AgentSentinel self-test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r backend/requirements.txt
+      - name: Unit tests
+        working-directory: backend
+        run: python -m pytest -q
+      - name: Every red-team scenario still produces its expected outcome
+        run: python scripts/run_scenarios.py
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - working-directory: frontend
+        run: npm ci --no-audit --no-fund && npm run build
+
+  gate-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Allowed step runs
+        id: tests
+        uses: ./github-action
+        with:
+          start-local: "true"
+          agent-id: coding-agent
+          tool: run_tests
+          resource: ci_sandbox/demo
+          task: Review the pull request and run the test suite
+          run: echo "tests would run here"
+
+      - name: Production deploy is blocked
+        id: deploy
+        continue-on-error: true   # demo only: we WANT to observe the block
+        uses: ./github-action
+        with:
+          start-local: "true"
+          agent-id: coding-agent
+          tool: deploy_prod
+          resource: production/demo
+          task: Review the pull request and run the test suite
+          run: echo "THIS MUST NEVER PRINT"
+
+      - name: Assert Sentinel's decisions
+        run: |
+          test "${{ steps.tests.outputs.decision }}" = "ALLOW"
+          test "${{ steps.deploy.outputs.decision }}" = "BLOCK"
+          test "${{ steps.deploy.outcome }}" = "failure"
+          echo "Sentinel allowed the tests and blocked the deploy."
