@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # AgentSentinel — one-command launcher.
 #   chmod +x start.sh && ./start.sh
-# No Docker, no sudo, no API keys. Ctrl+C stops everything it started.
+# Starts both services in the BACKGROUND and returns to the prompt. They keep running
+# after you log out. Stop them with ./stop.sh. Logs: .run/backend.log, .run/frontend.log
+# No Docker, no sudo, no API keys.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -241,6 +243,12 @@ trap cleanup EXIT
 trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM
 
+# Detach services from this terminal: their own session (no Ctrl+C / hang-up from the
+# shell) so they survive logout. Both tools exec in place, so the recorded PIDs stay valid.
+DETACH=()
+command -v setsid >/dev/null 2>&1 && DETACH+=(setsid)
+DETACH+=(nohup)
+
 # ---------------------------------------------------------- database + seed
 info "Initializing database and demo data"
 (cd backend && python -m app.database.seed) || fail "Database initialization failed (see output above)."
@@ -248,8 +256,8 @@ info "Initializing database and demo data"
 # ------------------------------------------------------------------ backend
 info "Starting FastAPI backend on http://$HOST:$BACKEND_PORT"
 # `exec` makes the recorded PID the server itself, so nothing is orphaned on stop.
-(cd backend && exec python -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" --log-level warning) \
-  > "$RUN_DIR/backend.log" 2>&1 &
+(cd backend && exec "${DETACH[@]}" python -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" --log-level warning) \
+  > "$RUN_DIR/backend.log" 2>&1 < /dev/null &
 BACKEND_PID=$!
 echo "$BACKEND_PID" > "$BACKEND_PID_FILE"
 
@@ -267,8 +275,8 @@ info "Backend healthy"
 # ----------------------------------------------------------------- frontend
 info "Starting Vite frontend on http://$FRONTEND_BIND:$FRONTEND_PORT"
 export VITE_BACKEND_URL="http://$HOST:$BACKEND_PORT"  # where the dev server proxies /api
-(cd frontend && exec node node_modules/vite/bin/vite.js --host "$FRONTEND_BIND" --port "$FRONTEND_PORT" --strictPort) \
-  > "$RUN_DIR/frontend.log" 2>&1 &
+(cd frontend && exec "${DETACH[@]}" node node_modules/vite/bin/vite.js --host "$FRONTEND_BIND" --port "$FRONTEND_PORT" --strictPort) \
+  > "$RUN_DIR/frontend.log" 2>&1 < /dev/null &
 FRONTEND_PID=$!
 echo "$FRONTEND_PID" > "$FRONTEND_PID_FILE"
 
@@ -306,7 +314,10 @@ Health:
 
 http://localhost:$BACKEND_PORT/health
 
-Press Ctrl+C to stop.
+Running in the background (PIDs $BACKEND_PID, $FRONTEND_PID).
+
+Stop:   ./stop.sh
+Logs:   tail -f .run/backend.log .run/frontend.log
 
 ================================================
 
@@ -329,10 +340,6 @@ AWS: allow inbound TCP $FRONTEND_PORT in the instance's security group.
 EOF
 fi
 
-# Stay in the foreground; if either service dies, shut the other down too.
-while pid_alive "$BACKEND_PID" && pid_alive "$FRONTEND_PID"; do
-  sleep 1
-done
-pid_alive "$BACKEND_PID" || { echo; info "Backend stopped unexpectedly. Log: $RUN_DIR/backend.log"; }
-pid_alive "$FRONTEND_PID" || { echo; info "Frontend stopped unexpectedly. Log: $RUN_DIR/frontend.log"; }
-exit 1
+# Startup succeeded: hand the services over to the background and return to the prompt.
+trap - INT TERM EXIT
+exit 0

@@ -308,7 +308,7 @@ chmod +x start.sh stop.sh
 ./start.sh
 ```
 
-`start.sh` creates `.venv`, installs backend and frontend dependencies only when they changed, copies `.env.example` to `.env`, initializes and seeds the database, starts FastAPI on `127.0.0.1:8000`, waits for `/health`, starts Vite on `127.0.0.1:5173`, and stops both cleanly on Ctrl+C.
+`start.sh` creates `.venv`, installs backend and frontend dependencies only when they changed, copies `.env.example` to `.env`, initializes and seeds the database, starts FastAPI on `127.0.0.1:8000`, waits for `/health`, starts Vite on `127.0.0.1:5173`, then **returns to the prompt with both running in the background** (they survive logout). Stop them with `./stop.sh`.
 
 | | |
 | --- | --- |
@@ -318,7 +318,7 @@ chmod +x start.sh stop.sh
 | Health | http://localhost:8000/health |
 
 - `./start.sh` always starts fresh: it stops a previous run and **kills whatever is listening on its two ports** (an older copy, an orphan, a stray server) before launching.
-- `./stop.sh` stops services started by `start.sh` from another terminal.
+- `./stop.sh` stops them. If a port is held by something `start.sh` cannot stop, it moves to the next free port and says so.
 - Other ports: `SENTINEL_BACKEND_PORT=8010 SENTINEL_FRONTEND_PORT=5183 ./start.sh`.
 
 ### Run on AWS EC2 (public IP)
@@ -333,7 +333,7 @@ chmod +x start.sh stop.sh
 - On EC2, `start.sh` reads the public IP from the instance metadata service and switches to **public mode** automatically. Force it anywhere with `./start.sh --public`; force localhost-only with `./start.sh --local`.
 - In public mode only the dashboard port (5173) listens on all interfaces. The API stays bound to `127.0.0.1` and is reached through the dashboard: `/api`, `/health`, `/docs`.
 - In the instance's **security group**, add an inbound rule: Custom TCP, port 5173. **Source: "My IP"**, not `0.0.0.0/0` — this POC has no login, so anyone who can reach the port can use every admin control.
-- Keep it running after you log out: `nohup ./start.sh > sentinel.log 2>&1 &` (stop with `./stop.sh`).
+- It keeps running after you log out; stop it with `./stop.sh`.
 - Logs: `.run/backend.log`, `.run/frontend.log`.
 - Optional Docker: `docker compose up`.
 - Reset the demo data: `python scripts/seed_demo.py --reset` or Settings → Reset demo data.
