@@ -9,13 +9,15 @@ from app.providers.base import SYSTEM_PROMPT, SafetyProvider, build_user_prompt,
 
 
 class AnthropicProvider(SafetyProvider):
-    """Claude via the Messages API (plain HTTP, so no extra SDK dependency)."""
+    """Anthropic Messages API (plain HTTP, so no extra SDK dependency)."""
 
     name = "anthropic"
 
     def evaluate(self, ctx: dict[str, Any]) -> dict[str, Any]:
         if not settings.anthropic_api_key:
             raise RuntimeError("ANTHROPIC_API_KEY is not set")
+        if not settings.anthropic_model:
+            raise RuntimeError("ANTHROPIC_MODEL is not set")
         response = httpx.post(
             "https://api.anthropic.com/v1/messages",
             headers={

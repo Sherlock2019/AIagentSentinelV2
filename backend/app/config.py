@@ -27,7 +27,7 @@ class Settings:
         self.gemini_api_key: str = os.getenv("GEMINI_API_KEY") or ""
         self.gemini_model: str = os.getenv("GEMINI_MODEL") or "gemini-2.0-flash"
         self.anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY") or ""
-        self.anthropic_model: str = os.getenv("ANTHROPIC_MODEL") or "claude-haiku-5-5"
+        self.anthropic_model: str = os.getenv("ANTHROPIC_MODEL") or ""
 
         # Real webhook delivery happens ONLY when this is explicitly configured.
         self.alert_webhook_url: str = os.getenv("ALERT_WEBHOOK_URL") or ""
