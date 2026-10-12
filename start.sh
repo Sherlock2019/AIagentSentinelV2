@@ -73,12 +73,44 @@ port_pids() {
     command -v lsof >/dev/null 2>&1 && lsof -t -iTCP:"$1" -sTCP:LISTEN 2>/dev/null
   } | sort -u
 }
+# The port belongs to root or another user (typical on EC2: a Docker container, or an
+# earlier run started with sudo). Use passwordless sudo if the account has it.
+free_port_privileged() {
+  local port="$1" containers pids pid
+  sudo -n true 2>/dev/null || return 1
+  # A Docker-published port: stop the container cleanly instead of killing docker-proxy.
+  if command -v docker >/dev/null 2>&1; then
+    containers="$(sudo -n docker ps -q --filter "publish=$port" 2>/dev/null || true)"
+    if [ -n "$containers" ]; then
+      for c in $containers; do
+        info "Port $port is published by Docker container $(sudo -n docker ps --filter "id=$c" --format '{{.Names}} ({{.Image}})') — stopping it"
+        sudo -n docker stop "$c" >/dev/null || true
+      done
+    fi
+  fi
+  for _ in 1 2; do
+    port_in_use "$port" || return 0
+    pids="$(sudo -n ss -ltnpH "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)"
+    [ -n "$pids" ] || break
+    for pid in $pids; do
+      info "Port $port is held by PID $pid ($(ps -p "$pid" -o user=,args= 2>/dev/null | cut -c1-70)) — stopping it with sudo"
+      sudo -n kill -TERM "$pid" 2>/dev/null || true
+    done
+    for _ in $(seq 1 25); do port_in_use "$port" || return 0; sleep 0.2; done
+    for pid in $pids; do sudo -n kill -KILL "$pid" 2>/dev/null || true; done
+    sleep 0.5
+  done
+  ! port_in_use "$port"
+}
+
 free_port() {
   local port="$1" pids pid
   pids="$(port_pids "$port" || true)"
   if [ -z "$pids" ]; then
     port_in_use "$port" || return 0
-    fail "Port $port is in use by a process this user cannot see (another user or root).
+    free_port_privileged "$port" && return 0
+    fail "Port $port is in use by a process this user cannot see (another user or root),
+         and passwordless sudo is not available to stop it.
          Find it with:  sudo ss -ltnp | grep :$port   and stop it, or pick other ports:
            SENTINEL_BACKEND_PORT=8010 SENTINEL_FRONTEND_PORT=5183 ./start.sh"
   fi
