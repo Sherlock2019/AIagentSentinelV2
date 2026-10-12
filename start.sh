@@ -109,10 +109,7 @@ free_port() {
   if [ -z "$pids" ]; then
     port_in_use "$port" || return 0
     free_port_privileged "$port" && return 0
-    fail "Port $port is in use by a process this user cannot see (another user or root),
-         and passwordless sudo is not available to stop it.
-         Find it with:  sudo ss -ltnp | grep :$port   and stop it, or pick other ports:
-           SENTINEL_BACKEND_PORT=8010 SENTINEL_FRONTEND_PORT=5183 ./start.sh"
+    return 1  # owned by someone we cannot stop: the caller moves to another port
   fi
   for pid in $pids; do
     info "Port $port is held by PID $pid ($(ps -p "$pid" -o args= 2>/dev/null | cut -c1-70)) — stopping it"
@@ -124,11 +121,32 @@ free_port() {
   done
   for pid in $(port_pids "$port" || true); do kill -KILL "$pid" 2>/dev/null || true; done
   sleep 0.5
-  port_in_use "$port" && fail "Could not free port $port (owned by another user?). Try: sudo ss -ltnp | grep :$port"
+  port_in_use "$port" && return 1
   return 0
 }
-free_port "$BACKEND_PORT"
-free_port "$FRONTEND_PORT"
+
+# First free port at or above $1 (and different from $2).
+next_free_port() {
+  local candidate
+  for candidate in $(seq "$1" $(( $1 + 100 ))); do
+    [ "$candidate" = "${2:-}" ] && continue
+    port_in_use "$candidate" || { echo "$candidate"; return 0; }
+  done
+  return 1
+}
+
+# Free our ports; if one belongs to something we cannot stop (another user, root,
+# a container without sudo), move to the next free port instead of giving up.
+if ! free_port "$BACKEND_PORT"; then
+  NEW_PORT="$(next_free_port $(( BACKEND_PORT + 1 )) "$FRONTEND_PORT")" || fail "No free backend port found above $BACKEND_PORT."
+  info "Port $BACKEND_PORT is held by a process this user cannot stop — using port $NEW_PORT for the backend instead"
+  BACKEND_PORT="$NEW_PORT"
+fi
+if ! free_port "$FRONTEND_PORT"; then
+  NEW_PORT="$(next_free_port $(( FRONTEND_PORT + 1 )) "$BACKEND_PORT")" || fail "No free dashboard port found above $FRONTEND_PORT."
+  info "Port $FRONTEND_PORT is held by a process this user cannot stop — using port $NEW_PORT for the dashboard instead"
+  FRONTEND_PORT="$NEW_PORT"
+fi
 
 # ----------------------------------------------------------- public / EC2 mode
 # Ask the EC2 metadata service (IMDSv2) for this instance's public IP. Prints nothing off EC2.
