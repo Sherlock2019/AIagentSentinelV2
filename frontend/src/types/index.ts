@@ -292,9 +292,17 @@ export interface PipelineJob {
 
 export interface PipelineRun {
   repository: string;
-  run_id: string;
+  run_number: number;
+  branch: string;
+  pull: number;
   agent: Agent;
   jobs: PipelineJob[];
+}
+
+export interface PipelineInfo {
+  repository: string;
+  agent_id: string;
+  jobs: { job: string; name: string; tool: string; resource: string; run: string; on_review: string }[];
 }
 
 export interface GithubScenario {

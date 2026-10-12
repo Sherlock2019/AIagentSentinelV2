@@ -1,5 +1,5 @@
 import {
-  Activity, AlertTriangle, BarChart3, Bot, Brain, ClipboardList, FlaskConical, Network, PlayCircle, Power, ScrollText, Search, GitCommitHorizontal, Settings, Shield, WifiOff,
+  Activity, AlertTriangle, BarChart3, Bot, Brain, ClipboardList, FlaskConical, Network, PlayCircle, Power, ScrollText, Search, GitCommitHorizontal, Info, MessageSquareText, Settings, Shield, WifiOff, Workflow,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
@@ -10,8 +10,11 @@ import { useDemo } from "./GuidedDemo";
 import { Button, Segmented, cx } from "./ui";
 
 const NAV: { to: string; label: string; icon: ReactNode; badge?: "alerts" | "approvals"; start?: boolean }[] = [
+  { to: "/what-it-does", label: "What It Does", icon: <Info className="h-4 w-4" />, start: true },
   { to: "/how-it-works", label: "How It Works", icon: <Brain className="h-4 w-4" />, start: true },
+  { to: "/test-demo", label: "Test Demo", icon: <MessageSquareText className="h-4 w-4" />, start: true },
   { to: "/integrations", label: "Test a Commit", icon: <GitCommitHorizontal className="h-4 w-4" />, start: true },
+  { to: "/cicd", label: "GitHub CI/CD", icon: <Workflow className="h-4 w-4" />, start: true },
   { to: "/", label: "Security Operations", icon: <Shield className="h-4 w-4" /> },
   { to: "/agents", label: "Agents", icon: <Bot className="h-4 w-4" /> },
   { to: "/monitor", label: "Live Monitor", icon: <Activity className="h-4 w-4" /> },
@@ -40,7 +43,7 @@ function Sidebar() {
       <nav className="scroll-thin flex-1 space-y-0.5 overflow-y-auto px-3 py-2" aria-label="Main">
         {NAV.map((item, i) => (
           <div key={item.to}>
-          {i === 2 && <div className="mx-3 my-2 border-t border-slate-800" />}
+          {i === 5 && <div className="mx-3 my-2 border-t border-slate-800" />}
           <NavLink
             to={item.to}
             end={item.to === "/"}

@@ -16,6 +16,20 @@ def intercept(client, **body):
     return client.post("/api/actions/intercept", json={"agent_id": CODING, **body}).json()
 
 
+def test_pipeline_demo_allows_tests_holds_patch_blocks_deploy(client):
+    for _ in range(2):  # reproducible on repeat
+        run = client.post("/api/integrations/github/pipeline/run").json()
+        assert [(j["job"], j["response"]["decision"], j["outcome"], j["command_ran"]) for j in run["jobs"]] == [
+            ("test", "ALLOW", "success", True),
+            ("patch", "REVIEW", "waiting", False),
+            ("deploy", "BLOCK", "failure", False),
+        ]
+        assert run["agent"]["status"] == "RUNNING"
+    # The held patch is a real pending action an admin can approve.
+    action_id = run["jobs"][1]["response"]["action_id"]
+    assert client.post(f"/api/actions/{action_id}/approve").json()["action"]["status"] == "APPROVED"
+
+
 def mock_run(client, scenario, **extra):
     return client.post("/api/integrations/github/run", json={"scenario": scenario, **extra})
 

@@ -177,6 +177,63 @@ def github_mock_run(body: MockRun, db: Session = Depends(get_db)) -> dict[str, A
     }
 
 
+# ------------------------------------------------- CI/CD pipeline demo (3 jobs)
+PIPELINE_REPO = "acme/storefront"
+PIPELINE: list[dict[str, Any]] = [
+    {
+        "job": "test", "name": "Agent runs the tests", "tool": "run_tests", "resource": "ci_sandbox/storefront",
+        "task": "Review pull request #128 and run the test suite", "run": "npm test", "on_review": "fail",
+    },
+    {
+        "job": "patch", "name": "Agent applies its patch", "tool": "apply_patch", "resource": "source_repo/storefront",
+        "task": "Apply the generated fix for pull request #128", "run": "git apply agent.patch", "on_review": "wait",
+    },
+    {
+        "job": "deploy", "name": "Agent tries to deploy to production", "tool": "deploy_prod", "resource": "production/storefront",
+        "task": "Review pull request #128 and run the test suite", "run": "./deploy.sh", "on_review": "fail",
+    },
+]
+
+
+@router.get("/github/pipeline")
+def pipeline_info() -> dict[str, Any]:
+    return {"repository": PIPELINE_REPO, "agent_id": DEMO_AGENT, "jobs": [{k: j[k] for k in ("job", "name", "tool", "resource", "run", "on_review")} for j in PIPELINE]}
+
+
+@router.post("/github/pipeline/run")
+def pipeline_run(db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Simulated pull-request pipeline: three jobs, each gated exactly as the real GitHub Action
+    gates it, through the real gateway."""
+    if get_settings(db)["emergency_stop_active"]:
+        raise HTTPException(409, "Emergency stop is active — release it to run the pipeline demo.")
+    agent = get_agent_or_404(db, DEMO_AGENT)
+    quarantine.reset_runtime(db, agent)
+    db.commit()
+
+    run_number = 100 + int(hashlib.sha1(new_id("r").encode()).hexdigest()[:4], 16) % 900
+    jobs = []
+    for job in PIPELINE:
+        context = {
+            "source": "github-actions", "simulated": True, "repository": PIPELINE_REPO, "workflow": "Guarded AI agent pipeline",
+            "job": job["job"], "run_number": run_number, "actor": "coding-agent[bot]", "ref": "refs/pull/128/merge", "event": "pull_request",
+        }
+        response = gateway.intercept(
+            db, InterceptRequest(agent_id=DEMO_AGENT, task=job["task"], tool=job["tool"], resource=job["resource"], context=context),
+            scenario="github_pipeline", internal=True,
+        )
+        decision = response["decision"]
+        if decision == "ALLOW":
+            outcome = "success"
+        elif decision == "REVIEW":
+            outcome = "waiting" if job["on_review"] == "wait" else "failure"
+        else:
+            outcome = "failure"
+        jobs.append({**{k: job[k] for k in ("job", "name", "tool", "resource", "run", "on_review")}, "outcome": outcome, "command_ran": outcome == "success", "response": response})
+
+    db.refresh(agent)
+    return {"repository": PIPELINE_REPO, "run_number": run_number, "branch": "fix/customer-validation", "pull": 128, "agent": agent.to_dict(), "jobs": jobs}
+
+
 @router.post("/agents/{agent_id}/token")
 def issue_agent_token(agent_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     """Rotate the agent's session token and return it ONCE, to be stored as a CI secret.

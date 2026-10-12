@@ -1,6 +1,6 @@
 import type {
   Agent, AgentDetail, Alert, AuditPage, CapabilityGraph, Catalog, EventDetail, EventSummary, GithubIntegrationInfo, GithubMockRun, InterceptResponse, Metrics,
-  Overview, PendingAction, PolicyDoc, PolicyRecord, PolicyValidation, Scenario, ScenarioResult, SystemSettings,
+  Overview, PendingAction, PipelineInfo, PipelineRun, PolicyDoc, PolicyRecord, PolicyValidation, Scenario, ScenarioResult, SystemSettings,
 } from "../types";
 
 export class ApiError extends Error {
@@ -83,6 +83,8 @@ export const api = {
   releaseEmergencyStop: () => post<{ restored: string[] }>("/api/system/emergency-stop/release"),
   resetDemo: () => post<{ reset: boolean }>("/api/system/reset"),
   githubInfo: () => get<GithubIntegrationInfo>("/api/integrations/github"),
-  githubRun: (body: { scenario: string; commit_url: string; trigger: string }) => post<GithubMockRun>("/api/integrations/github/run", body),
+  pipelineInfo: () => get<PipelineInfo>("/api/integrations/github/pipeline"),
+  pipelineRun: () => post<PipelineRun>("/api/integrations/github/pipeline/run"),
+  githubRun:(body: { scenario: string; commit_url: string; trigger: string }) => post<GithubMockRun>("/api/integrations/github/run", body),
   issueAgentToken: (agentId: string) => post<{ agent_id: string; token: string; note: string }>(`/api/integrations/agents/${agentId}/token`),
 };

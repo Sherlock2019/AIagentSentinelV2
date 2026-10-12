@@ -403,7 +403,9 @@ Click **RUN GUIDED DEMO** (top right). Eleven steps, about five minutes:
 
 **Recruiter mode / Engineer mode** (top bar) switch the whole UI between a four-sentence plain-English story and the full evaluation: policy checks, judge scores, risk formula, raw JSON, request IDs, timings.
 
-Pages: Security Operations, Agents, Live Monitor, Alerts, Event Inspector, Capability Map, Policy Studio, Red Team Lab, Metrics, Audit Trail, How It Works, Settings.
+**Start here** (top of the sidebar): **What It Does** (the purpose, in plain language) → **How It Works** (interactive architecture) → **Test Demo** (chat with an AI agent and try to make it misbehave; Sentinel decides live) → **Test a Commit** (mock GitHub commit review) → **GitHub CI/CD** (a GitHub Actions run gated by Sentinel, with approve/reject, plus setup and a workflow generator).
+
+Other pages: Security Operations, Agents, Live Monitor, Alerts, Event Inspector, Capability Map, Policy Studio, Red Team Lab, Metrics, Audit Trail, How It Works, Settings.
 
 ## API
 
